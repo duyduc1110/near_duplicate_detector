@@ -1,0 +1,30 @@
+# Near Duplicate Detection - Required Python Packages
+
+# Core data science libraries
+numpy>=1.21.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+
+# Natural language processing
+nltk>=3.6.0
+
+# Efficient similarity computation and LSH
+datasketch>=1.5.0
+textdistance>=4.2.0
+
+# Additional text processing utilities
+regex>=2021.4.4
+
+# For better performance (optional but recommended)
+numba>=0.53.0
+
+# Jupyter notebook support (if needed)
+jupyter>=1.0.0
+notebook>=6.0.0
+
+# Visualization (optional)
+matplotlib>=3.3.0
+seaborn>=0.11.0
+
+# Progress bars
+tqdm>=4.60.0

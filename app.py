@@ -5,9 +5,10 @@ Simple Near Duplicate Detection with TF-IDF and Embeddings.
 import os
 import time
 import logging
+from typing import Dict, List, Tuple
 from scripts.read_data import read_documents
 from scripts.tfidf import create_tfidf_vectors, save_vectors, load_vectors
-from scripts.finding_similar_doc import find_similar_documents, save_results
+from scripts.finding_similar_doc import find_similar_documents, save_similar_pairs, cosine_similarity
 from scripts.embedding import create_embeddings, find_similar_embeddings, save_embeddings, load_embeddings, cosine_similarity_embeddings
 
 EMBEDDING_AVAILABLE = True
@@ -93,7 +94,8 @@ class SimpleNearDuplicateDetector:
         
         # Save results
         if similar_pairs:
-            save_results(similar_pairs, self.tfidf_results)
+            save_similar_pairs(similar_pairs, self.tfidf_results.replace('.csv', '.pkl'))
+            self._save_csv_results(similar_pairs, self.tfidf_results)
             logger.info(f"TF-IDF found {len(similar_pairs)} similar pairs")
         else:
             logger.info("No similar pairs found with TF-IDF")
@@ -116,7 +118,8 @@ class SimpleNearDuplicateDetector:
         
         # Save results
         if similar_pairs:
-            save_results(similar_pairs, self.embedding_results)
+            save_similar_pairs(similar_pairs, self.embedding_results.replace('.csv', '.pkl'))
+            self._save_csv_results(similar_pairs, self.embedding_results)
             logger.info(f"Embeddings found {len(similar_pairs)} similar pairs")
         else:
             logger.info("No similar pairs found with embeddings")
@@ -149,6 +152,31 @@ class SimpleNearDuplicateDetector:
             agreement = len(common_pairs) / len(tfidf_pairs) * 100
             logger.info(f"Agreement rate: {agreement:.1f}%")
     
+    def _save_csv_results(self, pairs: List[Tuple[str, str, float]], filepath: str) -> None:
+        """Save similar document pairs to CSV file."""
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write("Document_1,Document_2,Similarity_Score\n")
+            for doc1, doc2, score in pairs:
+                f.write(f"{doc1},{doc2},{score:.6f}\n")
+        logger.info(f"Results saved to {filepath}")
+    
+    def _find_similar_to_doc(self, doc_id: str, vectors: Dict[str, List[float]], threshold: float = 0.7) -> List[Tuple[str, float]]:
+        """Find documents similar to a specific document using TF-IDF vectors."""
+        if doc_id not in vectors:
+            return []
+        
+        target_vector = vectors[doc_id]
+        similar_docs = []
+        
+        for other_doc_id, other_vector in vectors.items():
+            if other_doc_id != doc_id:
+                similarity = cosine_similarity(target_vector, other_vector)
+                if similarity >= threshold:
+                    similar_docs.append((other_doc_id, similarity))
+        
+        similar_docs.sort(key=lambda x: x[1], reverse=True)
+        return similar_docs
+    
     def find_similar_to_document(self, doc_id: str, method: str = "both"):
         """
         Find documents similar to a specific document.
@@ -163,8 +191,7 @@ class SimpleNearDuplicateDetector:
             if os.path.exists(self.tfidf_file):
                 vectors = load_vectors(self.tfidf_file)
                 if doc_id in vectors:
-                    from scripts.finding_similar_doc import find_duplicates_for_document
-                    similar = find_duplicates_for_document(doc_id, vectors, threshold=0.7)
+                    similar = self._find_similar_to_doc(doc_id, vectors, threshold=0.7)
                     logger.info(f"TF-IDF found {len(similar)} similar documents")
                     for sim_doc, score in similar[:5]:
                         logger.info(f"  {sim_doc}: {score:.3f}")

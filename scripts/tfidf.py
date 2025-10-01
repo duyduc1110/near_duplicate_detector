@@ -4,9 +4,13 @@ Transforms document text into TF-IDF vectors for similarity computation.
 """
 
 import pickle
+import logging
 from collections import Counter
 from typing import Dict, List, Tuple
 from math import log, sqrt
+
+# Set up logger for this module
+logger = logging.getLogger("near_duplicate_detector.tfidf")
 
 
 class SimpleTFIDF:
@@ -26,7 +30,7 @@ class SimpleTFIDF:
     
     def build_vocabulary(self, documents: Dict[str, str]) -> None:
         """Build vocabulary from documents."""
-        print("Building vocabulary...")
+        logger.info("Building vocabulary...")
         
         # Count word frequencies across all documents
         word_doc_count = Counter()
@@ -60,7 +64,7 @@ class SimpleTFIDF:
             doc_freq = word_doc_count[word]
             self.idf_values[word] = log(self.document_count / doc_freq)
         
-        print(f"Vocabulary size: {len(self.vocabulary)}")
+        logger.info(f"Vocabulary size: {len(self.vocabulary)}")
     
     def vectorize_document(self, text: str) -> List[float]:
         """
@@ -103,17 +107,17 @@ class SimpleTFIDF:
         """
         self.build_vocabulary(documents)
         
-        print("Transforming documents to TF-IDF vectors...")
+        logger.info("Transforming documents to TF-IDF vectors...")
         vectors = {}
         
         doc_ids = list(documents.keys())
         for i, doc_id in enumerate(doc_ids):
             if i % 100 == 0:
-                print(f"Vectorizing document {i+1}/{len(doc_ids)}...")
+                logger.debug(f"Vectorizing document {i+1}/{len(doc_ids)}...")
             
             vectors[doc_id] = self.vectorize_document(documents[doc_id])
         
-        print(f"Created {len(vectors)} TF-IDF vectors")
+        logger.info(f"Created {len(vectors)} TF-IDF vectors")
         return vectors
 
 
@@ -139,7 +143,7 @@ def create_tfidf_vectors(documents: Dict[str, str]) -> Dict[str, List[float]]:
     vectors = vectorizer.fit_transform(documents)
     
     # Normalize vectors
-    print("Normalizing vectors...")
+    logger.info("Normalizing vectors...")
     normalized_vectors = {}
     for doc_id, vector in vectors.items():
         normalized_vectors[doc_id] = normalize_vector(vector)
@@ -151,14 +155,14 @@ def save_vectors(vectors: Dict[str, List[float]], filepath: str) -> None:
     """Save vectors to file."""
     with open(filepath, 'wb') as f:
         pickle.dump(vectors, f)
-    print(f"Saved {len(vectors)} vectors to {filepath}")
+    logger.info(f"Saved {len(vectors)} vectors to {filepath}")
 
 
 def load_vectors(filepath: str) -> Dict[str, List[float]]:
     """Load vectors from file."""
     with open(filepath, 'rb') as f:
         vectors = pickle.load(f)
-    print(f"Loaded {len(vectors)} vectors from {filepath}")
+    logger.info(f"Loaded {len(vectors)} vectors from {filepath}")
     return vectors
 
 

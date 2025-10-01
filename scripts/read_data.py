@@ -5,8 +5,12 @@ Reads all documents from data/all_docs folder and preprocesses them.
 
 import os
 import re
+import logging
 from pathlib import Path
 from typing import Dict, List
+
+# Set up logger for this module
+logger = logging.getLogger("near_duplicate_detector.read_data")
 
 
 def preprocess_text(text: str) -> str:
@@ -37,15 +41,15 @@ def read_documents(data_dir: str) -> Dict[str, str]:
     data_path = Path(data_dir)
     
     if not data_path.exists():
-        print(f"Error: Directory {data_dir} does not exist!")
+        logger.error(f"Directory {data_dir} does not exist!")
         return documents
     
     txt_files = list(data_path.glob("*.txt"))
-    print(f"Found {len(txt_files)} text files")
+    logger.info(f"Found {len(txt_files)} text files")
     
     for i, file_path in enumerate(txt_files):
         if i % 100 == 0:
-            print(f"Processing file {i+1}/{len(txt_files)}...")
+            logger.debug(f"Processing file {i+1}/{len(txt_files)}...")
         
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -57,26 +61,26 @@ def read_documents(data_dir: str) -> Dict[str, str]:
                 documents[doc_id] = processed_content
                 
         except Exception as e:
-            print(f"Error reading {file_path}: {e}")
+            logger.error(f"Error reading {file_path}: {e}")
     
-    print(f"Successfully loaded {len(documents)} documents")
+    logger.info(f"Successfully loaded {len(documents)} documents")
     return documents
 
 
 def get_document_stats(documents: Dict[str, str]) -> None:
     """Print statistics about the document collection."""
     if not documents:
-        print("No documents to analyze")
+        logger.warning("No documents to analyze")
         return
     
     lengths = [len(text) for text in documents.values()]
     word_counts = [len(text.split()) for text in documents.values()]
     
-    print(f"\nDocument Statistics:")
-    print(f"Total documents: {len(documents)}")
-    print(f"Average length: {sum(lengths) / len(lengths):.0f} characters")
-    print(f"Average words: {sum(word_counts) / len(word_counts):.0f} words")
-    print(f"Shortest: {min(lengths)} chars, Longest: {max(lengths)} chars")
+    logger.info("Document Statistics:")
+    logger.info(f"Total documents: {len(documents)}")
+    logger.info(f"Average length: {sum(lengths) / len(lengths):.0f} characters")
+    logger.info(f"Average words: {sum(word_counts) / len(word_counts):.0f} words")
+    logger.info(f"Shortest: {min(lengths)} chars, Longest: {max(lengths)} chars")
 
 
 if __name__ == "__main__":

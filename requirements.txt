@@ -8,6 +8,11 @@ scikit-learn>=1.0.0
 # Natural language processing
 nltk>=3.6.0
 
+# Hugging Face transformers for embeddings
+sentence-transformers>=2.2.0
+transformers>=4.20.0
+torch>=1.12.0
+
 # Efficient similarity computation and LSH
 datasketch>=1.5.0
 textdistance>=4.2.0

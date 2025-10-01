@@ -4,8 +4,12 @@ Uses TF-IDF vectors to find near-duplicate documents using cosine similarity.
 """
 
 import pickle
+import logging
 from typing import Dict, List, Tuple
 from math import sqrt
+
+# Set up logger for this module
+logger = logging.getLogger("near_duplicate_detector.finding_similar_doc")
 
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
@@ -42,7 +46,7 @@ def find_similar_documents(vectors: Dict[str, List[float]],
     Returns:
         List of (doc1_id, doc2_id, similarity_score) tuples
     """
-    print(f"Finding similar documents with threshold {threshold}...")
+    logger.info(f"Finding similar documents with threshold {threshold}...")
     
     if clusters is None:
         # Original full comparison
@@ -59,13 +63,13 @@ def find_similar_documents_full(vectors: Dict[str, List[float]],
     similar_pairs = []
     total_comparisons = len(doc_ids) * (len(doc_ids) - 1) // 2
     
-    print(f"Comparing {total_comparisons} document pairs...")
+    logger.info(f"Comparing {total_comparisons} document pairs...")
     
     processed = 0
     for i, doc1_id in enumerate(doc_ids):
         if i % 50 == 0:
             progress = 100 * processed / total_comparisons
-            print(f"Progress: {progress:.1f}% ({processed}/{total_comparisons})")
+            logger.debug(f"Progress: {progress:.1f}% ({processed}/{total_comparisons})")
         
         vec1 = vectors[doc1_id]
         
@@ -83,7 +87,7 @@ def find_similar_documents_full(vectors: Dict[str, List[float]],
     # Sort by similarity (highest first)
     similar_pairs.sort(key=lambda x: x[2], reverse=True)
     
-    print(f"Found {len(similar_pairs)} similar document pairs")
+    logger.info(f"Found {len(similar_pairs)} similar document pairs")
     return similar_pairs
 
 
@@ -99,7 +103,7 @@ def find_similar_documents_clustered(vectors: Dict[str, List[float]],
         if doc_id in vectors:  # Make sure document has a vector
             cluster_groups[cluster_id].append(doc_id)
     
-    print(f"Comparing documents within {len(cluster_groups)} clusters...")
+    logger.info(f"Comparing documents within {len(cluster_groups)} clusters...")
     
     similar_pairs = []
     total_comparisons = 0
@@ -110,14 +114,14 @@ def find_similar_documents_clustered(vectors: Dict[str, List[float]],
         n = len(cluster_docs)
         total_comparisons += n * (n - 1) // 2
     
-    print(f"Total comparisons reduced to: {total_comparisons:,} (vs {len(vectors) * (len(vectors) - 1) // 2:,} full)")
+    logger.info(f"Total comparisons reduced to: {total_comparisons:,} (vs {len(vectors) * (len(vectors) - 1) // 2:,} full)")
     
     # Compare within each cluster
     for cluster_id, cluster_docs in cluster_groups.items():
         if len(cluster_docs) < 2:
             continue
             
-        print(f"Processing cluster {cluster_id} with {len(cluster_docs)} documents...")
+        logger.debug(f"Processing cluster {cluster_id} with {len(cluster_docs)} documents...")
         
         for i, doc1_id in enumerate(cluster_docs):
             vec1 = vectors[doc1_id]
@@ -135,12 +139,12 @@ def find_similar_documents_clustered(vectors: Dict[str, List[float]],
                 
                 if processed % 10000 == 0:
                     progress = 100 * processed / total_comparisons
-                    print(f"Progress: {progress:.1f}% ({processed:,}/{total_comparisons:,})")
+                    logger.debug(f"Progress: {progress:.1f}% ({processed:,}/{total_comparisons:,})")
     
     # Sort by similarity (highest first)
     similar_pairs.sort(key=lambda x: x[2], reverse=True)
     
-    print(f"Found {len(similar_pairs)} similar document pairs")
+    logger.info(f"Found {len(similar_pairs)} similar document pairs")
     return similar_pairs
 
 
@@ -159,7 +163,7 @@ def find_duplicates_for_document(doc_id: str,
         List of (similar_doc_id, similarity_score) tuples
     """
     if doc_id not in vectors:
-        print(f"Document {doc_id} not found!")
+        logger.warning(f"Document {doc_id} not found!")
         return []
     
     target_vector = vectors[doc_id]
@@ -180,25 +184,25 @@ def find_duplicates_for_document(doc_id: str,
 def get_similarity_statistics(similar_pairs: List[Tuple[str, str, float]]) -> None:
     """Print statistics about similarity scores."""
     if not similar_pairs:
-        print("No similar pairs found")
+        logger.info("No similar pairs found")
         return
     
     scores = [score for _, _, score in similar_pairs]
     
-    print(f"\nSimilarity Statistics:")
-    print(f"Total pairs found: {len(similar_pairs)}")
-    print(f"Highest similarity: {max(scores):.4f}")
-    print(f"Lowest similarity: {min(scores):.4f}")
-    print(f"Average similarity: {sum(scores) / len(scores):.4f}")
+    logger.info("Similarity Statistics:")
+    logger.info(f"Total pairs found: {len(similar_pairs)}")
+    logger.info(f"Highest similarity: {max(scores):.4f}")
+    logger.info(f"Lowest similarity: {min(scores):.4f}")
+    logger.info(f"Average similarity: {sum(scores) / len(scores):.4f}")
     
     # Distribution
     high_sim = sum(1 for s in scores if s >= 0.9)
     med_sim = sum(1 for s in scores if 0.7 <= s < 0.9)
     low_sim = sum(1 for s in scores if s < 0.7)
     
-    print(f"High similarity (≥0.9): {high_sim}")
-    print(f"Medium similarity (0.7-0.9): {med_sim}")
-    print(f"Lower similarity (<0.7): {low_sim}")
+    logger.info(f"High similarity (≥0.9): {high_sim}")
+    logger.info(f"Medium similarity (0.7-0.9): {med_sim}")
+    logger.info(f"Lower similarity (<0.7): {low_sim}")
 
 
 def save_results(similar_pairs: List[Tuple[str, str, float]], 
@@ -216,7 +220,7 @@ def save_results(similar_pairs: List[Tuple[str, str, float]],
         for doc1, doc2, score in similar_pairs:
             f.write(f"{doc1},{doc2},{score:.6f}\n")
     
-    print(f"Results saved to {output_file}")
+    logger.info(f"Results saved to {output_file}")
 
 
 from typing import Optional
@@ -236,13 +240,13 @@ def load_vectors_and_find_duplicates(vectors_file: str,
         List of similar document pairs
     """
     # Load vectors
-    print(f"Loading vectors from {vectors_file}...")
+    logger.info(f"Loading vectors from {vectors_file}...")
     try:
         with open(vectors_file, 'rb') as f:
             vectors = pickle.load(f)
-        print(f"Loaded {len(vectors)} vectors")
+        logger.info(f"Loaded {len(vectors)} vectors")
     except FileNotFoundError:
-        print(f"Error: Vectors file {vectors_file} not found!")
+        logger.error(f"Vectors file {vectors_file} not found!")
         return []
     
     # Load clusters if provided
@@ -251,9 +255,9 @@ def load_vectors_and_find_duplicates(vectors_file: str,
         try:
             with open(clusters_file, 'rb') as f:
                 clusters = pickle.load(f)
-            print(f"Loaded cluster assignments for {len(clusters)} documents")
+            logger.info(f"Loaded cluster assignments for {len(clusters)} documents")
         except FileNotFoundError:
-            print(f"Warning: Clusters file {clusters_file} not found, using full comparison")
+            logger.warning(f"Clusters file {clusters_file} not found, using full comparison")
     
     # Find similar documents
     similar_pairs = find_similar_documents(vectors, threshold, clusters)

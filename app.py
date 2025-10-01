@@ -1,215 +1,212 @@
 """
-Main application script for Near Duplicate Detection.
-Orchestrates the entire pipeline: read data -> create TF-IDF vectors -> find duplicates.
+Simple Near Duplicate Detection with TF-IDF and Embeddings.
 """
 
 import os
-import sys
 import time
-from pathlib import Path
-
-# Add scripts directory to path
-scripts_dir = Path(__file__).parent / "scripts"
-sys.path.append(str(scripts_dir))
-
-from scripts.read_data import read_documents, get_document_stats
+import logging
+from scripts.read_data import read_documents
 from scripts.tfidf import create_tfidf_vectors, save_vectors, load_vectors
-from scripts.clustering import cluster_documents, save_clusters, load_clusters
-from scripts.finding_similar_doc import load_vectors_and_find_duplicates, save_results
+from scripts.finding_similar_doc import find_similar_documents, save_results
+from scripts.embedding import create_embeddings, find_similar_embeddings, save_embeddings, load_embeddings, cosine_similarity_embeddings
+
+EMBEDDING_AVAILABLE = True
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
-class NearDuplicateDetector:
-    """Main application class for near duplicate detection."""
+class SimpleNearDuplicateDetector:
+    """Simple duplicate detector with optional embedding support."""
     
-    def __init__(self, data_dir: str, similarity_threshold: float = 0.7, use_clustering: bool = True):
+    def __init__(self, data_dir: str, use_embeddings: bool = True):
         """
-        Initialize the detector.
+        Initialize detector.
         
         Args:
-            data_dir: Directory containing text documents
-            similarity_threshold: Minimum similarity to consider documents as duplicates
-            use_clustering: Whether to use clustering to reduce comparisons
+            data_dir: Directory containing documents
+            use_embeddings: Whether to use embeddings for better accuracy
         """
         self.data_dir = data_dir
-        self.similarity_threshold = similarity_threshold
-        self.use_clustering = use_clustering
-        self.vectors_file = "tfidf_vectors.pkl"
-        self.clusters_file = "document_clusters.pkl"
-        self.results_file = "duplicate_results.csv"
-    
-    def run_full_pipeline(self) -> None:
-        """Run the complete duplicate detection pipeline."""
-        print("=" * 60)
-        print("Near Duplicate Detection Pipeline")
-        print("=" * 60)
+        self.use_embeddings = use_embeddings and EMBEDDING_AVAILABLE
         
+        # File paths
+        self.tfidf_file = "tfidf_vectors.pkl"
+        self.embedding_file = "embeddings.pkl"
+        self.tfidf_results = "tfidf_results.csv"
+        self.embedding_results = "embedding_results.csv"
+        
+        if self.use_embeddings:
+            logger.info("Embedding mode enabled")
+        else:
+            logger.info("TF-IDF only mode")
+    
+    def run_detection(self, tfidf_threshold: float = 0.7, embedding_threshold: float = 0.8):
+        """
+        Run duplicate detection pipeline.
+        
+        Args:
+            tfidf_threshold: Similarity threshold for TF-IDF
+            embedding_threshold: Similarity threshold for embeddings
+        """
+        logger.info("Starting duplicate detection...")
         start_time = time.time()
         
-        # Check for existing files
-        vectors_exist = os.path.exists(self.vectors_file)
-        clusters_exist = os.path.exists(self.clusters_file)
-        
-        print(f"\n🔍 Checking existing files...")
-        print(f"   TF-IDF vectors: {'✅ Found' if vectors_exist else '❌ Missing'}")
-        print(f"   Clusters: {'✅ Found' if clusters_exist else '❌ Missing'}")
-        
-        # Step 1 & 2: Load or create TF-IDF vectors
-        if vectors_exist:
-            print(f"\n📂 Loading existing TF-IDF vectors from {self.vectors_file}...")
-            vectors = load_vectors(self.vectors_file)
-            documents = None  # Don't need to load documents if we have vectors
-        else:
-            print("\n📁 Step 1: Reading documents...")
-            documents = read_documents(self.data_dir)
-            
-            if not documents:
-                print("❌ No documents found! Please check the data directory.")
-                return
-            
-            get_document_stats(documents)
-            
-            print("\n🔢 Step 2: Creating TF-IDF vectors...")
-            vectors = create_tfidf_vectors(documents)
-            save_vectors(vectors, self.vectors_file)
-        
-        # Step 3: Load or create clusters (if enabled)
-        clusters_file = None
-        if self.use_clustering:
-            if clusters_exist:
-                print(f"\n� Loading existing clusters from {self.clusters_file}...")
-                clusters = load_clusters(self.clusters_file)
-                clusters_file = self.clusters_file
-            else:
-                print(f"\n�🗂️  Step 3: Clustering documents to reduce comparisons...")
-                
-                # Load documents if we don't have them yet (for hybrid clustering)
-                if documents is None:
-                    print("   Loading documents for clustering...")
-                    documents = read_documents(self.data_dir)
-                
-                clusters = cluster_documents(vectors, documents, method="hybrid", n_clusters=25)
-                save_clusters(clusters, self.clusters_file)
-                clusters_file = self.clusters_file
-            
-            # Calculate comparison reduction
-            total_docs = len(vectors)
-            original_comparisons = total_docs * (total_docs - 1) // 2
-            
-            from collections import defaultdict
-            cluster_groups = defaultdict(list)
-            for doc_id, cluster_id in clusters.items():
-                cluster_groups[cluster_id].append(doc_id)
-            
-            clustered_comparisons = sum(len(docs) * (len(docs) - 1) // 2 
-                                      for docs in cluster_groups.values())
-            
-            reduction = 100 * (1 - clustered_comparisons / original_comparisons)
-            print(f"   📊 Reduced comparisons from {original_comparisons:,} to {clustered_comparisons:,}")
-            print(f"   🚀 Comparison reduction: {reduction:.1f}%")
-        
-        # Step 4: Find similar documents
-        step_num = 4 if self.use_clustering else 3
-        print(f"\n🔍 Step {step_num}: Finding similar documents (threshold: {self.similarity_threshold})...")
-        similar_pairs = load_vectors_and_find_duplicates(self.vectors_file, self.similarity_threshold, clusters_file)
-        
-        # Step 5: Save and display results
-        step_num += 1
-        print(f"\n💾 Step {step_num}: Saving results...")
-        if similar_pairs:
-            save_results(similar_pairs, self.results_file)
-            self.display_results(similar_pairs)
-        else:
-            print("No duplicate pairs found with current threshold.")
-            print(f"Try lowering the threshold (currently {self.similarity_threshold})")
-        
-        # Cleanup
-        # self.cleanup_temp_files()
-        
-        end_time = time.time()
-        print(f"\n⏱️  Total processing time: {end_time - start_time:.2f} seconds")
-        print("✅ Pipeline completed successfully!")
-    
-    def display_results(self, similar_pairs) -> None:
-        """Display the results summary."""
-        print("\n" + "=" * 60)
-        print("📊 RESULTS SUMMARY")
-        print("=" * 60)
-        
-        print(f"Total duplicate pairs found: {len(similar_pairs)}")
-        
-        if similar_pairs:
-            print(f"\n🏆 Top 10 most similar document pairs:")
-            for i, (doc1, doc2, sim) in enumerate(similar_pairs[:10], 1):
-                print(f"{i:2d}. {doc1} ↔ {doc2} (similarity: {sim:.4f})")
-            
-            # Group by similarity ranges
-            high_sim = sum(1 for _, _, s in similar_pairs if s >= 0.9)
-            med_sim = sum(1 for _, _, s in similar_pairs if 0.8 <= s < 0.9)
-            low_sim = sum(1 for _, _, s in similar_pairs if s < 0.8)
-            
-            print(f"\n📈 Similarity distribution:")
-            print(f"   Very high (≥0.9): {high_sim} pairs")
-            print(f"   High (0.8-0.9):   {med_sim} pairs") 
-            print(f"   Medium (<0.8):    {low_sim} pairs")
-            
-            print(f"\n📄 Results saved to: {self.results_file}")
-    
-    def cleanup_temp_files(self) -> None:
-        """Clean up temporary files."""
-        if os.path.exists(self.vectors_file):
-            os.remove(self.vectors_file)
-            print(f"🧹 Cleaned up temporary file: {self.vectors_file}")
-    
-    def run_quick_check(self, doc_id: str) -> None:
-        """Find duplicates for a specific document."""
-        print(f"\n🔍 Quick check for document: {doc_id}")
-        
-        # Load vectors if they exist
-        if not os.path.exists(self.vectors_file):
-            print("❌ No vectors file found. Run full pipeline first.")
+        # Step 1: Load documents
+        logger.info("Loading documents...")
+        documents = read_documents(self.data_dir)
+        if not documents:
+            logger.error("No documents found!")
             return
         
-        from scripts.finding_similar_doc import find_duplicates_for_document
-        import pickle
+        logger.info(f"Loaded {len(documents)} documents")
         
-        with open(self.vectors_file, 'rb') as f:
-            vectors = pickle.load(f)
+        # Step 2: TF-IDF Analysis
+        logger.info("Running TF-IDF analysis...")
+        tfidf_results = self._run_tfidf_analysis(documents, tfidf_threshold)
         
-        similar_docs = find_duplicates_for_document(doc_id, vectors, self.similarity_threshold)
+        # Step 3: Embedding Analysis (if enabled)
+        if self.use_embeddings:
+            logger.info("Running embedding analysis...")
+            embedding_results = self._run_embedding_analysis(documents, embedding_threshold)
+            
+            # Compare results
+            self._compare_results(tfidf_results, embedding_results)
         
-        if similar_docs:
-            print(f"Found {len(similar_docs)} similar documents:")
-            for i, (sim_doc, score) in enumerate(similar_docs[:5], 1):
-                print(f"{i}. {sim_doc} (similarity: {score:.4f})")
+        total_time = time.time() - start_time
+        logger.info(f"Detection completed in {total_time:.2f} seconds")
+    
+    def _run_tfidf_analysis(self, documents: dict, threshold: float):
+        """Run TF-IDF duplicate detection."""
+        # Create or load TF-IDF vectors
+        if os.path.exists(self.tfidf_file):
+            logger.info("Loading existing TF-IDF vectors...")
+            vectors = load_vectors(self.tfidf_file)
         else:
-            print("No similar documents found.")
+            logger.info("Creating TF-IDF vectors...")
+            vectors = create_tfidf_vectors(documents)
+            save_vectors(vectors, self.tfidf_file)
+        
+        # Find similar documents
+        similar_pairs = find_similar_documents(vectors, threshold)
+        
+        # Save results
+        if similar_pairs:
+            save_results(similar_pairs, self.tfidf_results)
+            logger.info(f"TF-IDF found {len(similar_pairs)} similar pairs")
+        else:
+            logger.info("No similar pairs found with TF-IDF")
+        
+        return similar_pairs
+    
+    def _run_embedding_analysis(self, documents: dict, threshold: float):
+        """Run embedding-based duplicate detection."""
+        # Create or load embeddings
+        if os.path.exists(self.embedding_file):
+            logger.info("Loading existing embeddings...")
+            embeddings = load_embeddings(self.embedding_file)
+        else:
+            logger.info("Creating embeddings...")
+            embeddings = create_embeddings(documents)
+            save_embeddings(embeddings, self.embedding_file)
+        
+        # Find similar documents
+        similar_pairs = find_similar_embeddings(embeddings, threshold)
+        
+        # Save results
+        if similar_pairs:
+            save_results(similar_pairs, self.embedding_results)
+            logger.info(f"Embeddings found {len(similar_pairs)} similar pairs")
+        else:
+            logger.info("No similar pairs found with embeddings")
+        
+        return similar_pairs
+    
+    def _compare_results(self, tfidf_results: list, embedding_results: list):
+        """Compare TF-IDF and embedding results."""
+        if not tfidf_results or not embedding_results:
+            return
+        
+        # Convert to sets for comparison
+        tfidf_pairs = {(min(r[0], r[1]), max(r[0], r[1])) for r in tfidf_results}
+        embedding_pairs = {(min(r[0], r[1]), max(r[0], r[1])) for r in embedding_results}
+        
+        common_pairs = tfidf_pairs.intersection(embedding_pairs)
+        tfidf_only = tfidf_pairs - embedding_pairs
+        embedding_only = embedding_pairs - tfidf_pairs
+        
+        logger.info("=" * 50)
+        logger.info("RESULTS COMPARISON")
+        logger.info("=" * 50)
+        logger.info(f"TF-IDF pairs: {len(tfidf_pairs)}")
+        logger.info(f"Embedding pairs: {len(embedding_pairs)}")
+        logger.info(f"Common pairs: {len(common_pairs)}")
+        logger.info(f"TF-IDF only: {len(tfidf_only)}")
+        logger.info(f"Embedding only: {len(embedding_only)}")
+        
+        if len(tfidf_pairs) > 0:
+            agreement = len(common_pairs) / len(tfidf_pairs) * 100
+            logger.info(f"Agreement rate: {agreement:.1f}%")
+    
+    def find_similar_to_document(self, doc_id: str, method: str = "both"):
+        """
+        Find documents similar to a specific document.
+        
+        Args:
+            doc_id: Target document ID
+            method: "tfidf", "embedding", or "both"
+        """
+        logger.info(f"Finding documents similar to: {doc_id}")
+        
+        if method in ["tfidf", "both"]:
+            if os.path.exists(self.tfidf_file):
+                vectors = load_vectors(self.tfidf_file)
+                if doc_id in vectors:
+                    from scripts.finding_similar_doc import find_duplicates_for_document
+                    similar = find_duplicates_for_document(doc_id, vectors, threshold=0.7)
+                    logger.info(f"TF-IDF found {len(similar)} similar documents")
+                    for sim_doc, score in similar[:5]:
+                        logger.info(f"  {sim_doc}: {score:.3f}")
+        
+        if method in ["embedding", "both"] and self.use_embeddings:
+            if os.path.exists(self.embedding_file):
+                embeddings = load_embeddings(self.embedding_file)
+                if doc_id in embeddings:
+                    similar = []
+                    target_embedding = embeddings[doc_id]
+                    
+                    for other_id, other_embedding in embeddings.items():
+                        if other_id != doc_id:
+                            sim = cosine_similarity_embeddings(target_embedding, other_embedding)
+                            if sim >= 0.7:
+                                similar.append((other_id, sim))
+                    
+                    similar.sort(key=lambda x: x[1], reverse=True)
+                    logger.info(f"Embeddings found {len(similar)} similar documents")
+                    for sim_doc, score in similar[:5]:
+                        logger.info(f"  {sim_doc}: {score:.3f}")
 
 
 def main():
-    """Main execution function."""
-    # Configuration
-    data_directory = "/Users/le.duy.duc.nguyen/Documents/Github/happeo/data/all_docs"
-    similarity_threshold = 0.7  # Adjust as needed (0.5-0.9 range)
+    """Main function."""
+    data_dir = "/Users/le.duy.duc.nguyen/Documents/Github/happeo/data/all_docs"
     
-    # Validate data directory
-    if not os.path.exists(data_directory):
-        print(f"❌ Error: Data directory '{data_directory}' not found!")
-        print(f"Please ensure the directory exists and contains .txt files.")
+    if not os.path.exists(data_dir):
+        logger.error(f"Data directory not found: {data_dir}")
         return
     
-    # Initialize and run detector
-    detector = NearDuplicateDetector(
-        data_dir=data_directory,
-        similarity_threshold=similarity_threshold,
-        use_clustering=True  # Enable clustering for faster processing
+    # Initialize detector
+    detector = SimpleNearDuplicateDetector(
+        data_dir=data_dir,
+        use_embeddings=True  # Set to False for TF-IDF only
     )
     
-    # Run the pipeline
-    detector.run_full_pipeline()
-    
-    # Optional: Quick check for specific document
-    # detector.run_quick_check("0")  # Uncomment to check document "0"
-
+    # Run detection
+    detector.run_detection(
+        tfidf_threshold=0.7,
+        embedding_threshold=0.8
+    )
 
 if __name__ == "__main__":
     main()

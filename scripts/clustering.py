@@ -4,11 +4,15 @@ Groups documents into clusters with model persistence for fast prediction on new
 """
 
 import pickle
+import logging
 import numpy as np
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+
+# Set up logger for this module
+logger = logging.getLogger("near_duplicate_detector.clustering")
 
 
 class ProductionClusteringModel:
@@ -51,7 +55,7 @@ class ProductionClusteringModel:
             vectors: Document TF-IDF vectors
             documents: Original document texts (needed for hybrid approach)
         """
-        print(f"Training {self.approach} clustering model...")
+        logger.info(f"Training {self.approach} clustering model...")
         
         if self.approach == "single":
             self._train_single_kmeans(vectors)
@@ -61,14 +65,14 @@ class ProductionClusteringModel:
             self._train_hybrid_kmeans(vectors, documents)
         
         self.trained = True
-        print("✅ Model training completed!")
+        logger.info("Model training completed!")
     
     def _train_single_kmeans(self, vectors: Dict[str, List[float]]):
         """Train single K-means on all vectors."""
         doc_ids = list(vectors.keys())
         vector_matrix = np.array([vectors[doc_id] for doc_id in doc_ids])
         
-        print(f"Training single K-means on {len(vectors)} documents...")
+        logger.info(f"Training single K-means on {len(vectors)} documents...")
         
         # Initialize and fit the model
         self.kmeans_model = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)
@@ -81,13 +85,13 @@ class ProductionClusteringModel:
         # Calculate silhouette score
         if len(set(cluster_labels)) > 1:
             silhouette_avg = silhouette_score(vector_matrix, cluster_labels)
-            print(f"Silhouette Score: {silhouette_avg:.3f}")
+            logger.info(f"Silhouette Score: {silhouette_avg:.3f}")
         
         self._print_cluster_stats()
     
     def _train_hybrid_kmeans(self, vectors: Dict[str, List[float]], documents: Dict[str, str]):
         """Train hybrid approach with length grouping."""
-        print("Training hybrid clustering (length + similarity)...")
+        logger.info("Training hybrid clustering (length + similarity)...")
         
         # Step 1: Calculate length boundaries from training data
         doc_lengths = [(doc_id, len(documents[doc_id])) for doc_id in vectors.keys()]
@@ -118,7 +122,7 @@ class ProductionClusteringModel:
                 for doc_id in group_doc_ids:
                     self.doc_id_to_cluster[doc_id] = cluster_counter
                 cluster_counter += 1
-                print(f"Length group {i}: {min_length}-{max_length} chars, {len(group_doc_ids)} docs → 1 cluster")
+                logger.debug(f"Length group {i}: {min_length}-{max_length} chars, {len(group_doc_ids)} docs → 1 cluster")
             else:
                 # Large group - subdivide using K-means
                 group_vectors = np.array([vectors[doc_id] for doc_id in group_doc_ids])
@@ -137,9 +141,9 @@ class ProductionClusteringModel:
                     self.doc_id_to_cluster[doc_id] = global_cluster_id
                 
                 cluster_counter += subclusters_needed
-                print(f"Length group {i}: {min_length}-{max_length} chars, {len(group_doc_ids)} docs → {subclusters_needed} clusters")
+                logger.debug(f"Length group {i}: {min_length}-{max_length} chars, {len(group_doc_ids)} docs → {subclusters_needed} clusters")
         
-        print(f"Created {cluster_counter} total clusters")
+        logger.info(f"Created {cluster_counter} total clusters")
     
     def predict_cluster(self, vector: List[float], document_text: Optional[str] = None) -> int:
         """
@@ -213,10 +217,10 @@ class ProductionClusteringModel:
         for cluster_id in self.doc_id_to_cluster.values():
             cluster_sizes[cluster_id] += 1
         
-        print(f"\nCluster distribution:")
+        logger.info(f"Cluster distribution:")
         for cluster_id in sorted(cluster_sizes.keys()):
             size = cluster_sizes[cluster_id]
-            print(f"Cluster {cluster_id}: {size} documents")
+            logger.debug(f"Cluster {cluster_id}: {size} documents")
     
     def save_model(self, filepath: str):
         """Save trained model to disk."""
@@ -232,7 +236,7 @@ class ProductionClusteringModel:
         
         with open(filepath, 'wb') as f:
             pickle.dump(model_data, f)
-        print(f"Model saved to {filepath}")
+        logger.info(f"Model saved to {filepath}")
     
     def load_model(self, filepath: str):
         """Load trained model from disk."""
@@ -247,125 +251,24 @@ class ProductionClusteringModel:
         self.length_models = model_data['length_models']
         self.doc_id_to_cluster = model_data['doc_id_to_cluster']
         
-        print(f"Model loaded from {filepath}")
-
-
-# Legacy functions for backward compatibility
-def kmeans_clustering(vectors: Dict[str, List[float]], 
-                     n_clusters: int = 50,
-                     random_state: int = 42) -> Dict[str, int]:
-    """
-    Legacy K-means clustering function for backward compatibility.
-    """
-    model = ProductionClusteringModel(approach="single", n_clusters=n_clusters)
-    model.train(vectors)
-    return model.get_cluster_assignments()
-
-
-def simple_clustering_by_length(vectors: Dict[str, List[float]], 
-                               documents: Dict[str, str],
-                               n_clusters: int = 20) -> Dict[str, int]:
-    """
-    Simple clustering based on document length - faster alternative.
+        logger.info(f"Model loaded from {filepath}")
     
-    Args:
-        vectors: Document vectors
-        documents: Original document texts
-        n_clusters: Number of clusters
-        
-    Returns:
-        Dictionary mapping document_id -> cluster_id
-    """
-    print(f"Clustering documents by length into {n_clusters} groups...")
+    def save_clusters(self, filepath: str):
+        """Save cluster assignments to file."""
+        with open(filepath, 'wb') as f:
+            pickle.dump(self.doc_id_to_cluster, f)
+        logger.info(f"Saved cluster assignments to {filepath}")
     
-    # Calculate document lengths
-    doc_lengths = [(doc_id, len(documents[doc_id])) for doc_id in vectors.keys()]
-    doc_lengths.sort(key=lambda x: x[1])  # Sort by length
+    def load_clusters(self, filepath: str):
+        """Load cluster assignments from file."""
+        with open(filepath, 'rb') as f:
+            self.doc_id_to_cluster = pickle.load(f)
+        logger.info(f"Loaded cluster assignments from {filepath}")
     
-    # Divide into equal-sized groups
-    docs_per_cluster = len(doc_lengths) // n_clusters
-    assignments = {}
-    
-    for i, (doc_id, length) in enumerate(doc_lengths):
-        cluster_id = min(i // docs_per_cluster, n_clusters - 1)
-        assignments[doc_id] = cluster_id
-    
-    # Print cluster statistics
-    cluster_info = defaultdict(list)
-    for doc_id, cluster_id in assignments.items():
-        cluster_info[cluster_id].append(len(documents[doc_id]))
-    
-    print(f"\nLength-based clusters:")
-    for cluster_id in sorted(cluster_info.keys()):
-        lengths = cluster_info[cluster_id]
-        print(f"Cluster {cluster_id}: {len(lengths)} docs, "
-              f"length range: {min(lengths)}-{max(lengths)} chars")
-    
-    return assignments
+    def group_documents_by_cluster(self) -> Dict[int, List[str]]:
+        """Group document IDs by their cluster assignments."""
+        clusters = defaultdict(list)
+        for doc_id, cluster_id in self.doc_id_to_cluster.items():
+            clusters[cluster_id].append(doc_id)
+        return dict(clusters)
 
-
-def save_clustering_model(model: ProductionClusteringModel, filepath: str) -> None:
-    """Save clustering model to file."""
-    model.save_model(filepath)
-
-
-def load_clustering_model(filepath: str) -> ProductionClusteringModel:
-    """Load clustering model from file."""
-    model = ProductionClusteringModel()
-    model.load_model(filepath)
-    return model
-
-
-def save_clusters(assignments: Dict[str, int], filepath: str) -> None:
-    """Save cluster assignments to file (legacy compatibility)."""
-    with open(filepath, 'wb') as f:
-        pickle.dump(assignments, f)
-    print(f"Saved cluster assignments to {filepath}")
-
-
-def load_clusters(filepath: str) -> Dict[str, int]:
-    """Load cluster assignments from file (legacy compatibility)."""
-    with open(filepath, 'rb') as f:
-        assignments = pickle.load(f)
-    print(f"Loaded cluster assignments from {filepath}")
-    return assignments
-
-
-def group_documents_by_cluster(assignments: Dict[str, int]) -> Dict[int, List[str]]:
-    """Group document IDs by their cluster assignments."""
-    clusters = defaultdict(list)
-    for doc_id, cluster_id in assignments.items():
-        clusters[cluster_id].append(doc_id)
-    return dict(clusters)
-
-
-def cluster_documents(vectors: Dict[str, List[float]], 
-                     documents: Optional[Dict[str, str]] = None,
-                     method: str = "hybrid",
-                     n_clusters: int = 30) -> Dict[str, int]:
-    """
-    Main clustering function using production model.
-    
-    Args:
-        vectors: Document TF-IDF vectors
-        documents: Original document texts (needed for hybrid method)
-        method: Clustering method ("single" or "hybrid")
-        n_clusters: Number of clusters
-        
-    Returns:
-        Dictionary mapping document_id -> cluster_id
-    """
-    # Map legacy method names
-    if method == "kmeans":
-        method = "single"
-    elif method == "length":
-        # For pure length-based clustering, use simple implementation
-        if documents is None:
-            raise ValueError("Documents needed for length-based clustering")
-        return simple_clustering_by_length(vectors, documents, n_clusters)
-    
-    # Use production clustering model
-    model = ProductionClusteringModel(approach=method, n_clusters=n_clusters)
-    model.train(vectors, documents)
-    
-    return model.get_cluster_assignments()

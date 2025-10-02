@@ -48,6 +48,49 @@ A production-ready FastAPI service for detecting near-duplicate documents using 
    
    The duplicate is detected because the file was copied from an existing document. This demonstrates the duplicate detection working correctly!
 
+5. **Test near-duplicate detection (optional)**
+   ```bash
+   # Copy a document and make a small modification
+   cp data/all_docs/1.txt data/new_docs/modified_document.txt
+   
+   # Edit the file slightly (e.g., change a few words, add a sentence)
+   # You can use any text editor:
+   nano data/new_docs/modified_document.txt
+   # or
+   vim data/new_docs/modified_document.txt
+   
+   # Upload the modified document
+   curl -X POST "http://localhost:8000/documents" \
+     -H "Content-Type: application/json" \
+     -d '{"doc_name": "modified_document"}'
+   ```
+   
+   **Possible outcomes:**
+   
+   - **If changes are minor** (e.g., changed 1-2 words):
+   ```json
+   {
+     "detail": "Document modified_document has duplicates: 1"
+   }
+   ```
+   The semantic analysis (Phase 2) detects it as a near-duplicate despite small changes.
+   
+   - **If changes are significant** (e.g., rewritten several sentences):
+   ```json
+   {
+     "id": "modified_document",
+     "content": "modified text...",
+     "duplicate_check": {
+       "has_duplicates": false,
+       "tfidf_duplicates": [],
+       "embedding_duplicates": [],
+       "max_tfidf_similarity": 0.65,
+       "max_embedding_similarity": 0.75
+     }
+   }
+   ```
+   Document is accepted as unique since similarity scores are below thresholds (0.7 for TF-IDF, 0.8 for embeddings).
+
 ### First Run Initialization
 The service will automatically:
 - Load documents from `data/all_docs/` (ensure you've downloaded the Kaggle dataset)

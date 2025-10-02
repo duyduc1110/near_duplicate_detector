@@ -119,8 +119,12 @@ class SimilarityService:
         logger.info(f"Checking for duplicates for document: {doc_id}")
         
         # Phase 1: Quick content check (1-5ms) - check for exact duplicates
+        # Normalize content for comparison (strip leading/trailing whitespace)
+        normalized_content = content.strip()
+        
         for existing_doc_id, existing_content in self.documents.items():
-            if content == existing_content:
+            normalized_existing = existing_content
+            if normalized_content == normalized_existing:
                 logger.warning(f"Exact content duplicate found: {existing_doc_id}")
                 exact_duplicate = SimilarDocument(id=existing_doc_id, similarity_score=1.0)
                 return DuplicateCheckResult(
@@ -130,6 +134,8 @@ class SimilarityService:
                     max_tfidf_similarity=1.0,
                     max_embedding_similarity=1.0
                 )
+        
+        logger.info(f"No exact content match found, proceeding to semantic analysis")
         
         # Phase 2: Semantic analysis (100-500ms) - check for near duplicates
         tfidf_duplicates = []

@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from api.models import DocumentResponse, DocumentUploadRequest, DocumentUploadResponse, SimilarDocumentsResponse, HealthResponse, RootResponse
 from api.services import SimilarityService
 from api.lifespan import get_documents, get_tfidf_vectors, get_clusters, get_embeddings, get_tfidf_vectorizer
+from scripts.read_data import preprocess_text
 
 router = APIRouter()
 
@@ -89,7 +90,10 @@ async def upload_document(document: DocumentUploadRequest):
     try:
         # Read content from existing file
         with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+            content = f.read().strip()
+        
+        # Preprocess content to match the format of existing documents
+        processed_content = preprocess_text(content)
         
         # Use service layer to add document with duplicate checking
         documents = get_documents()
@@ -99,11 +103,11 @@ async def upload_document(document: DocumentUploadRequest):
         tfidf_vectorizer = get_tfidf_vectorizer()
         
         similarity_service = SimilarityService(documents, tfidf_vectors, embeddings, clusters, tfidf_vectorizer)
-        duplicate_check = similarity_service.add_document(doc_name, content)
+        duplicate_check = similarity_service.add_document(doc_name, processed_content)
         
         return DocumentUploadResponse(
             id=doc_name,
-            content=content,
+            content=processed_content,
             duplicate_check=duplicate_check
         )
     

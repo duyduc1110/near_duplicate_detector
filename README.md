@@ -18,8 +18,15 @@ A production-ready FastAPI service for detecting near-duplicate documents using 
 
 2. **Start the API service**
    ```bash
-   docker-compose up --build
+   docker compose up --build
    ```
+   
+   **Note:** First run will take **7-10 minutes** to complete initialization:
+   - Loading documents (~30 seconds)
+   - Creating TF-IDF vectors (~2 minutes)
+   - Generating document clusters (~1 minute)
+   - Creating semantic embeddings (~5-6 minutes)
+   - Subsequent startups are instant (models are cached)
 
 3. **Access the API**
    - API Base URL: `http://localhost:8000`
@@ -90,14 +97,6 @@ A production-ready FastAPI service for detecting near-duplicate documents using 
    }
    ```
    Document is accepted as unique since similarity scores are below thresholds (0.7 for TF-IDF, 0.8 for embeddings).
-
-### First Run Initialization
-The service will automatically:
-- Load documents from `data/all_docs/` (ensure you've downloaded the Kaggle dataset)
-- Create TF-IDF vectors (~2 minutes)
-- Generate document clusters for optimization
-- Create semantic embeddings (~5 minutes)
-- Cache all models for fast subsequent startups
 
 ## API Endpoints
 

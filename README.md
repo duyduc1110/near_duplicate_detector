@@ -2,7 +2,7 @@
 
 A production-ready FastAPI service for detecting near-duplicate documents using TF-IDF and semantic embeddings with clustering optimization.
 
-## 🚀 Quick Start wi}
+## 🚀 Quick Start
 ```
 
 ## 🛠️ Developmentrequisites

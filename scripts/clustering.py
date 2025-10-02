@@ -72,17 +72,3 @@ def get_cluster_members(clusters: Dict[str, int], cluster_id: int) -> List[str]:
     """Get all document IDs in a specific cluster."""
     return [doc_id for doc_id, cid in clusters.items() if cid == cluster_id]
 
-
-if __name__ == "__main__":
-    # Test
-    from read_data import read_documents
-    from tfidf import create_tfidf_vectors
-    
-    data_dir = "/Users/le.duy.duc.nguyen/Documents/Github/happeo/data/all_docs"
-    documents = read_documents(data_dir)
-    
-    if documents:
-        vectors = create_tfidf_vectors(documents)
-        clusters = create_clusters(vectors, documents)
-        save_clusters(clusters, "clusters.pkl")
-

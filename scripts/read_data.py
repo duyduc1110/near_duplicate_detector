@@ -81,10 +81,3 @@ def get_document_stats(documents: Dict[str, str]) -> None:
     logger.info(f"Average length: {sum(lengths) / len(lengths):.0f} characters")
     logger.info(f"Average words: {sum(word_counts) / len(word_counts):.0f} words")
     logger.info(f"Shortest: {min(lengths)} chars, Longest: {max(lengths)} chars")
-
-
-if __name__ == "__main__":
-    # Test the script
-    data_dir = "/Users/le.duy.duc.nguyen/Documents/Github/happeo/data/all_docs"
-    docs = read_documents(data_dir)
-    get_document_stats(docs)

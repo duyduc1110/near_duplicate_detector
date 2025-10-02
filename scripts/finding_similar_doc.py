@@ -6,17 +6,23 @@ import pickle
 import logging
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 
 logger = logging.getLogger("near_duplicate_detector.finding_similar_doc")
 
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
-    """Calculate cosine similarity between two vectors."""
+    """Calculate cosine similarity between two vectors using optimized sklearn."""
     if len(vec1) != len(vec2):
         return 0.0
     
-    dot_product = sum(a * b for a, b in zip(vec1, vec2))
-    return max(0.0, min(1.0, dot_product))
+    # Use sklearn's optimized implementation
+    v1 = np.array(vec1).reshape(1, -1)
+    v2 = np.array(vec2).reshape(1, -1)
+    similarity = sklearn_cosine_similarity(v1, v2)[0, 0]
+    
+    return max(0.0, min(1.0, float(similarity)))
 
 
 def find_similar_documents(vectors: Dict[str, List[float]], 
@@ -114,19 +120,3 @@ def load_similar_pairs(filepath: str) -> List[Tuple[str, str, float]]:
         pairs = pickle.load(f)
     logger.info(f"Loaded {len(pairs)} similar pairs from {filepath}")
     return pairs
-
-
-if __name__ == "__main__":
-    # Test
-    from read_data import read_documents
-    from tfidf import create_tfidf_vectors
-    from clustering import create_clusters
-    
-    data_dir = "/Users/le.duy.duc.nguyen/Documents/Github/happeo/data/all_docs"
-    documents = read_documents(data_dir)
-    
-    if documents:
-        vectors = create_tfidf_vectors(documents)
-        clusters = create_clusters(vectors, documents)
-        similar_pairs = find_similar_documents(vectors, threshold=0.7, clusters=clusters)
-        save_similar_pairs(similar_pairs, "similar_pairs.pkl")

@@ -6,6 +6,7 @@ import pickle
 import logging
 from typing import Dict, List
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Set up logger
 logger = logging.getLogger("near_duplicate_detector.embedding")
@@ -72,25 +73,35 @@ def load_embeddings(filepath: str) -> Dict[str, List[float]]:
 
 
 def cosine_similarity_embeddings(vec1: List[float], vec2: List[float]) -> float:
-    """Calculate cosine similarity between two embedding vectors."""
-    # Convert to numpy arrays
-    v1 = np.array(vec1)
-    v2 = np.array(vec2)
+    """Calculate cosine similarity between two embedding vectors using sklearn."""
+    # Convert to numpy arrays and reshape for sklearn
+    v1 = np.array(vec1).reshape(1, -1)
+    v2 = np.array(vec2).reshape(1, -1)
     
-    # Calculate cosine similarity
-    dot_product = np.dot(v1, v2)
-    norm_product = np.linalg.norm(v1) * np.linalg.norm(v2)
+    # Use sklearn's optimized cosine similarity
+    similarity = cosine_similarity(v1, v2)[0, 0]
     
-    if norm_product == 0:
-        return 0.0
+    return float(similarity)
+
+
+def batch_cosine_similarity(embeddings_matrix: np.ndarray) -> np.ndarray:
+    """
+    Calculate pairwise cosine similarities for all embeddings efficiently using sklearn.
     
-    return dot_product / norm_product
+    Args:
+        embeddings_matrix: numpy array of shape (n_docs, embedding_dim)
+        
+    Returns:
+        Similarity matrix of shape (n_docs, n_docs)
+    """
+    # Use sklearn's optimized implementation
+    return cosine_similarity(embeddings_matrix)
 
 
 def find_similar_embeddings(embeddings: Dict[str, List[float]], 
                            threshold: float = 0.8) -> List[tuple]:
     """
-    Find similar documents using embedding cosine similarity.
+    Find similar documents using embedding cosine similarity with optimized batch processing.
     
     Args:
         embeddings: Dictionary of document_id -> embedding_vector
@@ -102,41 +113,27 @@ def find_similar_embeddings(embeddings: Dict[str, List[float]],
     logger.info(f"Finding similar documents with embedding threshold {threshold}")
     
     doc_ids = list(embeddings.keys())
-    similar_pairs = []
+    if len(doc_ids) < 2:
+        return []
     
-    for i, doc1_id in enumerate(doc_ids):
-        for j in range(i + 1, len(doc_ids)):
-            doc2_id = doc_ids[j]
-            
-            similarity = cosine_similarity_embeddings(
-                embeddings[doc1_id], 
-                embeddings[doc2_id]
-            )
-            
+    # Convert to matrix for batch processing
+    embeddings_matrix = np.array([embeddings[doc_id] for doc_id in doc_ids])
+    
+    # Calculate all pairwise similarities at once
+    similarity_matrix = batch_cosine_similarity(embeddings_matrix)
+    
+    similar_pairs = []
+    n_docs = len(doc_ids)
+    
+    # Extract pairs above threshold (upper triangle only to avoid duplicates)
+    for i in range(n_docs):
+        for j in range(i + 1, n_docs):
+            similarity = similarity_matrix[i, j]
             if similarity >= threshold:
-                similar_pairs.append((doc1_id, doc2_id, similarity))
+                similar_pairs.append((doc_ids[i], doc_ids[j], float(similarity)))
     
     # Sort by similarity (highest first)
     similar_pairs.sort(key=lambda x: x[2], reverse=True)
     
     logger.info(f"Found {len(similar_pairs)} similar pairs with embeddings")
     return similar_pairs
-
-
-if __name__ == "__main__":
-    # Test
-    test_docs = {
-        "1": "This is a test document about machine learning.",
-        "2": "Machine learning is a subset of artificial intelligence.",
-        "3": "The weather is nice today."
-    }
-    
-    if EMBEDDING_AVAILABLE:
-        embeddings = create_embeddings(test_docs)
-        similar_pairs = find_similar_embeddings(embeddings, threshold=0.3)
-        
-        print("Similar pairs found:")
-        for doc1, doc2, sim in similar_pairs:
-            print(f"  {doc1} <-> {doc2}: {sim:.3f}")
-    else:
-        print("SentenceTransformers not available for testing")

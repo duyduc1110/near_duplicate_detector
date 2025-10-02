@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+*.md
+test_api.py
+demo_api.py
+validate_setup.py
+start_api.sh
+app.py
+analyze_dataset.py
+near_duplicate_detection.py

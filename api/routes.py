@@ -86,6 +86,7 @@ async def find_similar_documents(
     documents = get_documents()
     tfidf_vectors = get_tfidf_vectors()
     embeddings = get_embeddings()
+    clusters = get_clusters()
     
     if doc_id not in documents:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
@@ -93,8 +94,8 @@ async def find_similar_documents(
     if method not in ["tfidf", "embedding"]:
         raise HTTPException(status_code=400, detail="Method must be 'tfidf' or 'embedding'")
     
-    # Initialize similarity service
-    similarity_service = SimilarityService(documents, tfidf_vectors, embeddings)
+    # Initialize similarity service with clusters
+    similarity_service = SimilarityService(documents, tfidf_vectors, embeddings, clusters)
     
     similar_docs = []
     if method == "tfidf":

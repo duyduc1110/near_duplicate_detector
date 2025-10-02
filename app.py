@@ -8,13 +8,15 @@ import logging
 from typing import Dict, List, Tuple
 from scripts.read_data import read_documents
 from scripts.tfidf import create_tfidf_vectors, save_vectors, load_vectors
+from scripts.clustering import create_clusters, save_clusters, load_clusters
 from scripts.finding_similar_doc import find_similar_documents, save_similar_pairs, cosine_similarity
 from scripts.embedding import create_embeddings, find_similar_embeddings, save_embeddings, load_embeddings, cosine_similarity_embeddings
 
 EMBEDDING_AVAILABLE = True
+LOGGING_LEVEL = logging.DEBUG
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=LOGGING_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +36,7 @@ class SimpleNearDuplicateDetector:
         
         # File paths
         self.tfidf_file = "tfidf_vectors.pkl"
+        self.clusters_file = "clusters.pkl"
         self.embedding_file = "embeddings.pkl"
         self.tfidf_results = "tfidf_results.csv"
         self.embedding_results = "embedding_results.csv"
@@ -89,8 +92,17 @@ class SimpleNearDuplicateDetector:
             vectors = create_tfidf_vectors(documents)
             save_vectors(vectors, self.tfidf_file)
         
-        # Find similar documents
-        similar_pairs = find_similar_documents(vectors, threshold)
+        # Create or load clusters
+        if os.path.exists(self.clusters_file):
+            logger.info("Loading existing clusters...")
+            clusters = load_clusters(self.clusters_file)
+        else:
+            logger.info("Creating clusters...")
+            clusters = create_clusters(vectors, documents)
+            save_clusters(clusters, self.clusters_file)
+        
+        # Find similar documents using clusters for optimization
+        similar_pairs = find_similar_documents(vectors, threshold, clusters)
         
         # Save results
         if similar_pairs:
@@ -168,11 +180,27 @@ class SimpleNearDuplicateDetector:
         target_vector = vectors[doc_id]
         similar_docs = []
         
-        for other_doc_id, other_vector in vectors.items():
-            if other_doc_id != doc_id:
-                similarity = cosine_similarity(target_vector, other_vector)
-                if similarity >= threshold:
-                    similar_docs.append((other_doc_id, similarity))
+        # Try to use clusters if available
+        clusters = None
+        if os.path.exists(self.clusters_file):
+            clusters = load_clusters(self.clusters_file)
+        
+        if clusters and doc_id in clusters:
+            # Use clustered approach for better performance
+            target_cluster = clusters[doc_id]
+            for other_doc_id, cluster_id in clusters.items():
+                if other_doc_id != doc_id and cluster_id == target_cluster and other_doc_id in vectors:
+                    other_vector = vectors[other_doc_id]
+                    similarity = cosine_similarity(target_vector, other_vector)
+                    if similarity >= threshold:
+                        similar_docs.append((other_doc_id, similarity))
+        else:
+            # Fallback to comparing all documents
+            for other_doc_id, other_vector in vectors.items():
+                if other_doc_id != doc_id:
+                    similarity = cosine_similarity(target_vector, other_vector)
+                    if similarity >= threshold:
+                        similar_docs.append((other_doc_id, similarity))
         
         similar_docs.sort(key=lambda x: x[1], reverse=True)
         return similar_docs
@@ -217,7 +245,7 @@ class SimpleNearDuplicateDetector:
 
 def main():
     """Main function."""
-    data_dir = "/Users/le.duy.duc.nguyen/Documents/Github/happeo/data/all_docs"
+    data_dir = "data/all_docs"
     
     if not os.path.exists(data_dir):
         logger.error(f"Data directory not found: {data_dir}")

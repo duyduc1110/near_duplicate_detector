@@ -133,3 +133,4 @@ cython_debug/
 *.pkl
 data
 duplicate_results.csv
+*.csv

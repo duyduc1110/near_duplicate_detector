@@ -19,7 +19,7 @@ documents = {}
 tfidf_vectors = {}
 clusters = {}
 embeddings = {}
-data_dir = "/Users/le.duy.duc.nguyen/Documents/Github/happeo/data/all_docs"
+data_dir = "data/all_docs"
 
 
 @asynccontextmanager

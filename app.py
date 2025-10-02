@@ -7,7 +7,7 @@ import time
 import logging
 from typing import Dict, List, Tuple
 from scripts.read_data import read_documents
-from scripts.tfidf import create_tfidf_vectors, save_vectors, load_vectors
+from scripts.tfidf import create_tfidf_vectors, save_vectors, load_vectors, save_vectorizer, load_vectorizer, transform_new_document
 from scripts.clustering import create_clusters, save_clusters, load_clusters
 from scripts.finding_similar_doc import find_similar_documents, save_similar_pairs, cosine_similarity
 from scripts.embedding import create_embeddings, find_similar_embeddings, save_embeddings, load_embeddings, cosine_similarity_embeddings
@@ -36,6 +36,7 @@ class SimpleNearDuplicateDetector:
         
         # File paths
         self.tfidf_file = "tfidf_vectors.pkl"
+        self.vectorizer_file = "tfidf_vectorizer.pkl"
         self.clusters_file = "clusters.pkl"
         self.embedding_file = "embeddings.pkl"
         self.tfidf_results = "tfidf_results.csv"
@@ -89,8 +90,9 @@ class SimpleNearDuplicateDetector:
             vectors = load_vectors(self.tfidf_file)
         else:
             logger.info("Creating TF-IDF vectors...")
-            vectors = create_tfidf_vectors(documents)
+            vectors, vectorizer = create_tfidf_vectors(documents)
             save_vectors(vectors, self.tfidf_file)
+            save_vectorizer(vectorizer, self.vectorizer_file)
         
         # Create or load clusters
         if os.path.exists(self.clusters_file):

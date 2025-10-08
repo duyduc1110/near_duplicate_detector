@@ -2,6 +2,10 @@
 
 A production-ready FastAPI service for detecting near-duplicate documents using TF-IDF and semantic embeddings with clustering optimization.
 
+## High-level Architecture
+We can discuss this in detail during the interview
+![High-level Architecture](high-level-architecture.png)
+
 ## Quick Start
 
 ### 🛠️ Developmentrequisites
